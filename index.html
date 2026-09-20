@@ -1,0 +1,1353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>极地航线决策台 · Polar Route Decision Console</title>
+<style>
+:root{
+  --bg:#0a1622; --panel:#0f2131; --panel2:#132b3f; --line:#21405a;
+  --txt:#dcebf7; --dim:#83a7bf; --accent:#39c2d7; --accent2:#4dd0e1;
+  --green:#43d17d; --amber:#f2b441; --orange:#f08a3c; --red:#ef5350;
+  --purple:#a985e0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  background:var(--bg);color:var(--txt);overflow:hidden;font-size:13px;
+}
+#app{display:grid;grid-template-rows:52px 1fr 118px;grid-template-columns:1fr 330px;
+  grid-template-areas:"top top" "map side" "timeline side";height:100vh;gap:1px;background:var(--line)}
+header{grid-area:top;display:flex;align-items:center;gap:14px;padding:0 16px;background:var(--panel)}
+.logo{font-weight:700;font-size:15px;letter-spacing:1px;white-space:nowrap}
+.logo small{color:var(--dim);font-weight:400;margin-left:8px;font-size:11px}
+.top-group{display:flex;align-items:center;gap:8px}
+.spacer{flex:1}
+#mapWrap{grid-area:map;position:relative;background:#07131e;overflow:hidden}
+#chart{display:block;width:100%;height:100%;cursor:crosshair}
+#side{grid-area:side;background:var(--panel);overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:10px}
+#timelineWrap{grid-area:timeline;background:var(--panel);padding:8px 14px 10px;display:flex;flex-direction:column;gap:6px}
+button{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:5px;
+  padding:5px 11px;font-size:12px;cursor:pointer;white-space:nowrap}
+button:hover{border-color:var(--accent);color:#fff}
+button.primary{background:#14485a;border-color:var(--accent)}
+button.danger{border-color:#7a3030;color:#f3a9a7}
+button.toggled{background:#1c5a41;border-color:var(--green);color:#eafff3}
+button:disabled{opacity:.4;cursor:not-allowed}
+.pill{font-size:11px;padding:3px 9px;border-radius:11px;border:1px solid var(--line);color:var(--dim);white-space:nowrap}
+.pill.on{color:var(--green);border-color:var(--green)}
+.pill.off{color:var(--red);border-color:var(--red)}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.card h3{font-size:12px;color:var(--accent2);margin-bottom:8px;display:flex;align-items:center;gap:7px;
+  text-transform:uppercase;letter-spacing:1px;font-weight:600}
+.card h3 .hint{color:var(--dim);font-weight:400;text-transform:none;letter-spacing:0;font-size:11px}
+.kv{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;font-size:12px}
+.kv .k{color:var(--dim)}
+.kv .v{text-align:right;font-variant-numeric:tabular-nums}
+.muted{color:var(--dim);font-size:11px}
+.tag{display:inline-block;padding:1px 7px;border-radius:9px;font-size:10.5px;font-weight:600}
+.t-low{background:rgba(67,209,125,.16);color:var(--green)}
+.t-mod{background:rgba(242,180,65,.16);color:var(--amber)}
+.t-high{background:rgba(240,138,60,.16);color:var(--orange)}
+.t-sev{background:rgba(239,83,80,.18);color:var(--red)}
+.impact{border-left:3px solid var(--red);background:rgba(239,83,80,.07);border-radius:0 6px 6px 0;
+  padding:7px 10px;margin-bottom:7px;font-size:11.5px}
+.impact.warn{border-color:var(--amber);background:rgba(242,180,65,.07)}
+.impact .t{font-weight:700;margin-bottom:2px}
+.impact .chain{color:var(--dim);margin-top:3px;line-height:1.45}
+.impact .chain b{color:var(--txt);font-weight:600}
+.wprow,.branchrow,.offrow{display:flex;align-items:center;gap:7px;padding:5px 4px;border-bottom:1px dashed rgba(33,64,90,.6);font-size:11.5px}
+.wprow .nm{flex:1}
+.wprow input[type=number]{width:52px;background:var(--bg);border:1px solid var(--line);color:var(--txt);
+  border-radius:4px;padding:2px 4px;font-size:11px}
+.iconbtn{padding:2px 7px;font-size:11px}
+#hud{position:absolute;top:10px;left:10px;display:flex;flex-direction:column;gap:6px;pointer-events:none}
+.hudrow{display:flex;gap:6px}
+.chip{background:rgba(10,22,34,.82);border:1px solid rgba(57,194,215,.35);border-radius:6px;
+  padding:5px 10px;font-size:11.5px;backdrop-filter:blur(2px)}
+.chip b{font-variant-numeric:tabular-nums}
+#selInfo{position:absolute;top:10px;right:10px;width:250px;background:rgba(10,22,34,.9);
+  border:1px solid rgba(57,194,215,.35);border-radius:8px;padding:10px 12px;display:none}
+#selInfo h4{font-size:12px;color:var(--accent2);margin-bottom:6px}
+.riskbars{display:flex;align-items:flex-end;gap:3px;height:42px;margin-top:6px}
+.riskbars .bar{flex:1;border-radius:2px 2px 0 0;min-height:3px;position:relative}
+.riskbars .bar span{position:absolute;bottom:-15px;left:0;right:0;text-align:center;font-size:8.5px;color:var(--dim)}
+#legend{position:absolute;bottom:10px;left:10px;display:flex;gap:12px;background:rgba(10,22,34,.82);
+  border:1px solid rgba(33,64,90,.8);border-radius:6px;padding:6px 12px;font-size:10.5px;color:var(--dim)}
+#legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+#toast{position:absolute;left:50%;top:60px;transform:translateX(-50%);background:rgba(20,72,90,.95);
+  border:1px solid var(--accent);border-radius:6px;padding:8px 16px;font-size:12px;display:none;z-index:9}
+#timeline{position:relative;height:46px;background:#081521;border:1px solid var(--line);border-radius:6px}
+#tlCanvas{position:absolute;inset:0;width:100%;height:100%;cursor:pointer}
+.tl-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--dim)}
+#branchTag{font-size:11px;color:var(--purple)}
+.fuelbar{height:7px;background:var(--bg);border-radius:4px;overflow:hidden;margin-top:3px}
+.fuelbar i{display:block;height:100%;background:var(--green);transition:width .25s}
+select{background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:4px;padding:3px 6px;font-size:11.5px}
+::-webkit-scrollbar{width:8px}::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo">❄ 极地航线决策台 <small>POLAR ROUTE DECISION CONSOLE</small></div>
+    <div class="top-group">
+      <span class="pill" id="simClock">D1 06:00</span>
+      <span class="pill" id="commsPill">● 通信在线</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="top-group">
+      <label class="muted">航速</label>
+      <select id="speedSel">
+        <option value="11.1">6 kn（抗冰）</option>
+        <option value="14.8">8 kn</option>
+        <option value="18.5" selected>10 kn（巡航）</option>
+        <option value="22.2">12 kn（全速）</option>
+      </select>
+    </div>
+    <div class="top-group">
+      <button id="btnPlay">▶ 开始推演</button>
+      <button id="btnStep">⏭ +30 分</button>
+      <select id="rateSel" title="推演倍速">
+        <option value="60">×1 小时</option>
+        <option value="300" selected>×5 小时</option>
+        <option value="900">×15 小时</option>
+        <option value="3600">×60 小时</option>
+      </select>
+      <button id="btnReset" class="danger">↺ 重置</button>
+    </div>
+  </header>
+
+  <div id="mapWrap">
+    <canvas id="chart"></canvas>
+    <div id="hud">
+      <div class="hudrow">
+        <div class="chip">位置 <b id="hudPos">0, 0</b></div>
+        <div class="chip">船速 <b id="hudSpd">—</b></div>
+        <div class="chip">艏向 <b id="hudHdg">—</b></div>
+      </div>
+      <div class="hudrow">
+        <div class="chip">燃料 <b id="hudFuel">—</b><div class="fuelbar"><i id="hudFuelBar" style="width:100%"></i></div></div>
+        <div class="chip">风速 <b id="hudWind">—</b></div>
+        <div class="chip">能见度 <b id="hudVis">—</b></div>
+        <div class="chip">局地风险 <b id="hudRisk">—</b></div>
+      </div>
+    </div>
+    <div id="selInfo"></div>
+    <div id="legend">
+      <span><i style="background:#9fd3e8"></i>低密集度冰</span>
+      <span><i style="background:#5b93b8"></i>中</span>
+      <span><i style="background:#2e5d80"></i>高风险冰带</span>
+      <span><i style="background:rgba(57,194,215,.25);border:1px solid #39c2d7"></i>通信覆盖</span>
+      <span><i style="background:#f08a3c"></i>补给站</span>
+      <span><i style="background:#b7e8f7"></i>航路点</span>
+    </div>
+    <div id="toast"></div>
+  </div>
+
+  <aside id="side">
+    <div class="card"><h3>航程概览 <span class="hint" id="forecastMeta"></span></h3>
+      <div class="kv">
+        <span class="k">预计抵达</span><span></span><span class="v" id="etaVal">—</span>
+        <span class="k">总航程</span><span></span><span class="v" id="distVal">—</span>
+        <span class="k">抵达时燃料</span><span></span><span class="v" id="fuelEndVal">—</span>
+        <span class="k">通信中断时长</span><span></span><span class="v" id="gapVal">—</span>
+        <span class="k">最高风险等级</span><span></span><span class="v" id="maxRiskVal">—</span>
+      </div>
+      <div class="muted" style="margin-top:6px" id="planStateLine"></div>
+    </div>
+
+    <div class="card"><h3>连锁影响 <span class="hint">风险 · 补给 · 通信</span></h3>
+      <div id="impactList"><div class="muted">当前方案未发现重大连锁影响。</div></div>
+    </div>
+
+    <div class="card"><h3>航路点 <span class="hint">拖动圆点 / 双击增删</span></h3>
+      <div id="wpList"></div>
+      <div class="muted" style="margin-top:6px">补给点 WP3 固定；等待窗口为该点到点后主动等待时长。</div>
+    </div>
+
+    <div class="card"><h3>历史分支 <span class="hint" id="branchTag"></span></h3>
+      <div id="branchList"></div>
+    </div>
+
+    <div class="card" id="offlineCard" style="display:none">
+      <h3>离线操作同步 <span class="hint">通信中断期间本地暂存</span></h3>
+      <div id="offlineList"></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button id="btnMerge" class="primary">合并勾选项</button>
+        <button id="btnDiscardOffline" class="danger">全部丢弃</button>
+      </div>
+      <div class="muted" style="margin-top:6px">合并时将逐项校验航路点是否仍存在，并基于岸上确认版本重放。</div>
+    </div>
+
+    <div class="card"><h3>通信链路 <span class="hint">演示开关</span></h3>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="btnOffline">模拟通信中断</button>
+        <span class="muted" id="commsHint">船舶驶入覆盖区外也会自动离线。</span>
+      </div>
+    </div>
+  </aside>
+
+  <div id="timelineWrap">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span class="muted">时间轴</span>
+      <span class="muted" id="tlHint">点击任意历史节点可从该时刻分叉重新推演；紫色段为通信离线期间，橙色带为补给窗口。</span>
+      <div class="spacer"></div>
+      <span class="muted" id="snapCount"></span>
+    </div>
+    <div id="timeline"><canvas id="tlCanvas"></canvas></div>
+    <div class="tl-labels" id="tlLabels"></div>
+  </div>
+</div>
+<script>
+"use strict";
+/* ============ 基础常量 ============ */
+const W=1400, H=900;                 // 海图世界坐标（0.35 km/px → 490km x 315km 海域）
+const KM=0.35;                       // 每像素公里数
+const T0=6*60;                       // 推演起始：第 1 天 06:00（相对分钟）
+const HORIZON=72*60;                 // 预测/时间轴范围：72 小时
+const SUPPLY_OPEN=20*60, SUPPLY_CLOSE=34*60; // 补给窗口（相对分钟）
+const DEADLINE=72*60;                // 计划抵达期限
+const FUEL_INIT=23, FUEL_MAX=72;
+const IDLE_BURN=0.15/60;             // 等待/停泊：吨/分钟
+let SIMUID=1;
+
+/* ============ 工具 ============ */
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+const deep=o=>JSON.parse(JSON.stringify(o));
+const uid=p=>p+(SIMUID++);
+function fmtClock(t){ // t：相对 T0 的分钟
+  const total=T0+Math.max(0,Math.round(t));
+  const d=1+Math.floor(total/1440), m=total%1440;
+  const h=Math.floor(m/60), mm=m%60;
+  return "D"+d+" "+String(h).padStart(2,"0")+":"+String(mm).padStart(2,"0");
+}
+function fmtDur(mins){
+  const h=Math.floor(Math.abs(mins)/60), m=Math.round(Math.abs(mins)%60);
+  return (mins<0?"-":"")+h+"h"+String(m).padStart(2,"0");
+}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+
+/* ============ 静态配置 ============ */
+const ICE_BELTS=[
+  {cx:300,cy:330,rx:320,ry:150,rot:0.55, peak:0.97, vx:-0.028,vy:0.012},
+  {cx:930,cy:560,rx:330,ry:140,rot:-0.35,peak:0.97, vx:0.024,vy:0.016},
+  {cx:720,cy:800,rx:280,ry:110,rot:0.1,  peak:0.80, vx:0.018,vy:-0.02},
+];
+const COMMS=[
+  {x:40,  y:860,r:340,name:"长城岸站"},
+  {x:520, y:170,r:300,name:"中继浮标 A"},
+  {x:1370,y:430,r:360,name:"中继浮标 B"},
+  {x:1080,y:690,r:210,name:"中继浮标 C"},
+];
+const SUPPLY={x:900,y:520};           // 固定补给点
+function defaultWaypoints(){
+  return [
+    {id:"wp1",name:"WP1 出发港",x:60,  y:830,wait:0,removable:false},
+    {id:"wp2",name:"WP2 陆架拐点",x:360,y:520,wait:0,removable:true},
+    {id:"wp3",name:"WP3 补给点",  x:900,y:520,wait:0,removable:false,supply:true},
+    {id:"wp4",name:"WP4 冰间航道",x:1120,y:330,wait:0,removable:true},
+    {id:"wp5",name:"WP5 作业区", x:1340,y:420,wait:0,removable:false},
+  ];
+}
+
+/* ============ 环境场（确定性，随仿真时间演化） ============ */
+function beltAtTime(b,t){
+  return {cx:b.cx+b.vx*t, cy:b.cy+b.vy*t, rx:b.rx, ry:b.ry, rot:b.rot, peak:b.peak};
+}
+function iceAt(x,y,t){
+  let c=0.17+0.05*Math.sin(x*0.013+y*0.009)+0.04*Math.sin(x*0.031-t*0.004);
+  for(const b0 of ICE_BELTS){
+    const b=beltAtTime(b0,t), s=Math.sin(b.rot), co=Math.cos(b.rot);
+    const dx=x-b.cx, dy=y-b.cy;
+    const u=(co*dx+s*dy)/b.rx, v=(-s*dx+co*dy)/b.ry;
+    const q=u*u+v*v;
+    if(q<1.6) c+=(b.peak-0.2)*Math.max(0,1-q/1.6);
+  }
+  return clamp(c,0.05,0.95);
+}
+function windAt(t){
+  const speed=clamp(10+4.5*Math.sin(t*0.0055-0.7)+2.5*Math.sin(t*0.019+1),3,22); // m/s
+  const dir=(200+60*Math.sin(t*0.0017)+18*Math.sin(t*0.006)+t*0.02)%360;     // 风吹向（度）
+  return {speed,dir};
+}
+function visAt(t){
+  const base=12+5*Math.sin(t*0.006+0.5);
+  const fog1=clamp(1-Math.abs(t-20*60)/240,0,1);
+  const fog2=clamp(1-Math.abs(t-50*60)/300,0,1);
+  return clamp(base-fog1*10.5-fog2*8,0.3,20); // km
+}
+function commsCovered(x,y){
+  return COMMS.some(c=>Math.hypot(x-c.x,y-c.y)<=c.r);
+}
+function riskOf(ice,wind,vis){
+  const r=clamp(ice*70+Math.max(0,wind-12)*2.6+Math.max(0,3-vis)*7,0,100);
+  return r;
+}
+function riskLevel(r){
+  if(r<30) return {n:"低",cls:"t-low",col:"#43d17d"};
+  if(r<50) return {n:"中",cls:"t-mod",col:"#f2b441"};
+  if(r<70) return {n:"高",cls:"t-high",col:"#f08a3c"};
+  return {n:"极高",cls:"t-sev",col:"#ef5350"};
+}
+/* ============ 运行状态 ============ */
+let S; // 全局 live 状态
+function makeFloes(){
+  const rnd=mulberry32(20260921), arr=[];
+  for(let i=0;i<64;i++){
+    arr.push({x:rnd()*W,y:rnd()*H,r:5+rnd()*15,rot:rnd()*Math.PI,
+      vx:(rnd()-0.5)*0.03,vy:(rnd()-0.5)*0.02,vr:(rnd()-0.5)*0.001});
+  }
+  return arr;
+}
+function initState(){
+  SIMUID=1;
+  const wps=defaultWaypoints();
+  S={
+    t:0, running:false,
+    plan:{waypoints:wps, speed:18.5},
+    ship:{x:wps[0].x,y:wps[0].y,hdg:0,leg:0,fuel:FUEL_INIT,
+      waitLeft:0,supplied:false,dead:false,done:false},
+    floes:makeFloes(),
+    trail:[{x:wps[0].x,y:wps[0].y}],
+    events:[],                       // live 已发生事件
+    offlineEpisodes:[],              // {start,end}
+    offNow:false, offStart:null,
+    manualOffline:false,
+    pendingOps:[],                   // 离线期间暂存操作
+    ackPlan:{waypoints:deep(wps),speed:18.5}, // 岸上最后确认版本
+    branches:[], activeBranch:"main",
+    snapshots:[], nextSnapAt:30,
+    selectedLeg:0,
+    dirty:true,
+  };
+}
+
+/* 路线几何：返回每段长度（km）与总长 */
+function legGeoms(wps){
+  const legs=[]; let total=0;
+  for(let i=0;i<wps.length-1;i++){
+    const px=dist(wps[i],wps[i+1])*KM;
+    legs.push({a:wps[i],b:wps[i+1],km:px}); total+=px;
+  }
+  return {legs,total};
+}
+
+/* ============ 单分钟推进（live / forecast 共用） ============ */
+function newRec(){
+  return {legs:[], events:[], offlineMins:0, maxRisk:0, maxRiskAt:0,
+    gapMins:0, finishT:null, endFuel:null, hours:[]};
+}
+function commsUpdate(st,t,rec){
+  const covered=commsCovered(st.ship.x,st.ship.y)&&!st.manualOffline;
+  if(!covered && !st.offNow){
+    st.offNow=true; st.offStart=t;
+    if(st._live) toast("已驶出通信覆盖 / 链路中断，操作开始本地暂存");
+  }
+  if(covered && st.offNow){
+    st.offNow=false;
+    st.offlineEpisodes.push({start:st.offStart,end:t});
+    st.offStart=null;
+    if(st._live) toast(S.pendingOps.length?"链路恢复：请审查并合并暂存操作":"链路恢复");
+  }
+}
+function stepMinute(st,plan,rec){
+  const sh=st.ship, wps=plan.waypoints;
+  // 浮冰漂移（live 与 forecast 都推进，保持确定性）
+  for(const f of st.floes){f.x+=f.vx;f.y+=f.vy;f.rot+=f.vr;}
+  const live=!!st._live;
+  const t=st.t;
+  commsUpdate(st,t,rec);
+
+  const ice=iceAt(sh.x,sh.y,t), wind=windAt(t), vis=visAt(t);
+  const r=riskOf(ice,wind.speed,vis);
+  if(rec){rec.maxRisk=Math.max(rec.maxRisk,r); if(r>rec.maxRisk-0.001)rec.maxRiskAt=t;}
+
+  // 等待处理
+  if(sh.waitLeft>0){
+    sh.waitLeft--;
+    sh.fuel=Math.max(0,sh.fuel-IDLE_BURN);
+    if(sh.fuel<=0 && !sh.dead){sh.dead=true;rec.events.push({type:"fuel",t,x:sh.x,y:sh.y,r});}
+    if(rec) recordTick(rec,t,sh,r,0);
+    checkEvents(st,t,ice,wind.speed,vis,r,0,rec,live);
+    if(sh.waitLeft===0 && sh._refuelAfterWait && !sh.supplied && t+1<=SUPPLY_CLOSE){
+      sh.supplied=true; sh.fuel=FUEL_MAX; sh._refuelAfterWait=false;
+      const ev={type:"supplied",t:t+1,wp:"补给站（开窗即补）"};
+      rec.events.push(ev);
+      if(live){S.events.push(ev); snapshot("完成补给","event");}
+    }
+    if(sh.waitLeft===0) sh._refuelAfterWait=false;
+    st.t++; return;
+  }
+
+  // 是否到达当前航段终点
+  const leg=clamp(sh.leg,0,wps.length-1);
+  sh.leg=leg;
+  if(leg>=wps.length-1){
+    sh.done=true;
+    if(rec && rec.finishT==null){rec.finishT=t;rec.endFuel=sh.fuel;}
+    st.t++; return;
+  }
+  const tgt=wps[leg+1], dx=tgt.x-sh.x, dy=tgt.y-sh.y;
+  const dPx=Math.hypot(dx,dy);
+  const slow=1-0.55*ice;                 // 冰阻减速
+  const spd=plan.speed*slow;            // km/h
+  const stepPx=spd/60/KM;
+  sh.hdg=Math.atan2(dy,dx);
+
+  if(dPx<=Math.max(stepPx,3)){
+    sh.x=tgt.x; sh.y=tgt.y;
+    onArrive(st,plan,tgt,leg,t,rec,live);
+    sh.leg=leg+1;
+  }else{
+    sh.x+=dx/dPx*stepPx; sh.y+=dy/dPx*stepPx;
+    const kn=plan.speed/1.852;
+    const burn=(0.095+0.03*kn+0.48*ice)/60;
+    sh.fuel=Math.max(0,sh.fuel-burn);
+  }
+  checkEvents(st,t,ice,wind.speed,vis,r,spd,rec,live);
+  if(rec) recordTick(rec,t,sh,r,spd);
+  if(sh.fuel<=0 && !sh.dead){
+    sh.dead=true;
+    rec.events.push({type:"fuel",t,x:sh.x,y:sh.y,r});
+  }
+  st.t++;
+}
+function recordTick(rec,t,sh,r,spd){
+  const h=Math.floor(t/60);
+  if(rec.hours.length<=h){
+    while(rec.hours.length<=h) rec.hours.push({iceMax:0,riskMax:0,riskSum:0,n:0,wind:0,vis:0,comms:true,commsOff:0});
+  }
+  const H=rec.hours[h];
+  H.iceMax=Math.max(H.iceMax,iceAt(sh.x,sh.y,t));
+  H.riskMax=Math.max(H.riskMax,r); H.riskSum+=r; H.n++;
+  H.wind=windAt(t).speed; H.vis=visAt(t);
+  if(!commsCovered(sh.x,sh.y)) H.commsOff++;
+}
+function onArrive(st,plan,wp,leg,t,rec,live){
+  const sh=st.ship;
+  const log=ev=>{rec.events.push(ev); if(live){S.events.push(ev); snapshot(ev.type==="supplied"?"完成补给":ev.type==="supplyMiss"?"错过补给窗口":ev.type==="supplyEarly"?"等待补给窗口":"主动等待","event");}};
+  if(wp.supply && !sh.supplied){
+    if(t<SUPPLY_OPEN){
+      const wait=SUPPLY_OPEN-t;
+      sh.waitLeft+=wait; sh._refuelAfterWait=true;
+      log({type:"supplyEarly",t,wait,wp:wp.name});
+    } else if(t>SUPPLY_CLOSE){
+      log({type:"supplyMiss",t,wp:wp.name});
+    } else {
+      sh.supplied=true; sh.fuel=FUEL_MAX;
+      log({type:"supplied",t,wp:wp.name});
+    }
+  }
+  if(wp.wait>0){
+    sh.waitLeft+=wp.wait;
+    log({type:"wait",t,wait:wp.wait,wp:wp.name});
+  }
+}
+function checkEvents(st,t,ice,windSpd,vis,r,spd,rec,live){
+  const E=rec.events;
+  const fire=ev=>{E.push(ev); if(live){S.events.push(ev); snapshot(ev.type==="ice"?"进入高风险冰带":ev.type==="gale"?"大风预警":"低能见度预警","event");}};
+  if(r>=70 && !E.some(e=>e.type==="ice"&&Math.abs(e.t-t)<45)){
+    fire({type:"ice",t,x:st.ship.x,y:st.ship.y,r});
+  }
+  if(windSpd>=17 && !E.some(e=>e.type==="gale"&&Math.abs(e.t-t)<120)){
+    fire({type:"gale",t,wind:windSpd});
+  }
+  if(vis<2 && !E.some(e=>e.type==="fog"&&Math.abs(e.t-t)<120)){
+    fire({type:"fog",t,vis});
+  }
+}
+/* ============ 预测推演：从当前船位出发，按候选方案跑 72h ============ */
+function runForecast(plan){
+  const st={
+    t:S.t, ship:{x:S.ship.x,y:S.ship.y,hdg:S.ship.hdg,leg:S.ship.leg,
+      fuel:S.ship.fuel,waitLeft:0,supplied:S.ship.supplied,dead:false,done:false},
+    floes:deep(S.floes), offlineEpisodes:[], offNow:S.offNow, offStart:S.offNow?S.t:null,
+    manualOffline:false, trail:[], events:[], _live:false
+  };
+  const rec=newRec();
+  const {legs}=legGeoms(plan.waypoints);
+  rec.legs=legs.map(g=>({...g,iceMax:0,riskMax:0,riskSum:0,n:0,offMins:0,
+    enterT:null,exitT:null,dist:0}));
+  let guard=0;
+  while(st.t-S.t<HORIZON && !st.ship.done && guard<HORIZON+5){
+    const beforeLeg=st.ship.leg;
+    stepMinute(st,plan,rec);
+    const L=rec.legs[Math.min(beforeLeg,rec.legs.length-1)];
+    if(L){
+      const ice=iceAt(st.ship.x,st.ship.y,st.t-1), wd=windAt(st.t-1), vs=visAt(st.t-1);
+      const rr=riskOf(ice,wd.speed,vs);
+      L.iceMax=Math.max(L.iceMax,ice); L.riskMax=Math.max(L.riskMax,rr);
+      L.riskSum+=rr; L.n++;
+      if(!commsCovered(st.ship.x,st.ship.y)) L.offMins++;
+      if(L.enterT==null) L.enterT=st.t-1-S.t;
+      L.exitT=st.t-S.t;
+    }
+    guard++;
+  }
+  if(st.offNow){ // 预测结束仍在离线：补一段未闭合区间
+    st.offlineEpisodes.push({start:st.offStart,end:st.t});
+    st.offStart=st.t; // 保持仍处于离线的语义
+  }
+  if(!st.ship.done && rec.finishT==null){
+    rec.finishT=null; rec.endFuel=st.ship.fuel;
+  }
+  rec.legs.forEach(L=>{L.riskAvg=L.n?L.riskSum/L.n:0;});
+  rec.offlineMins=st.offlineEpisodes.reduce((a,e)=>a+(e.end-e.start),0);
+  return rec;
+}
+
+/* 缓存的预测 */
+let forecast=null;   // 全程方案预测（从起点重放，用于航段详情/连锁影响）
+let remain=null;     // 从当前船位起的剩余航程预测（ETA/抵达燃料）
+function runFullForecast(plan){
+  const saved={t:S.t,ship:deep(S.ship),floes:deep(S.floes),offNow:S.offNow,offStart:S.offStart};
+  S.t=0;
+  S.ship={x:plan.waypoints[0].x,y:plan.waypoints[0].y,hdg:0,leg:0,
+    fuel:FUEL_INIT,waitLeft:0,supplied:false,dead:false,done:false};
+  S.floes=makeFloes(); S.offNow=false; S.offStart=null;
+  const rec=runForecast(plan);
+  S.t=saved.t; S.ship=saved.ship; S.floes=saved.floes;
+  S.offNow=saved.offNow; S.offStart=saved.offStart;
+  return rec;
+}
+function refreshForecast(){
+  forecast=runFullForecast(S.plan);
+  remain=runForecast(S.plan);
+  buildImpacts(forecast);
+  S.dirty=false;
+}
+
+/* ============ 连锁影响 ============ */
+let impacts=[];
+function pushImpact(sev,title,chain){
+  impacts.push({sev,title,chain});
+}
+function buildImpacts(rec){
+  impacts=[];
+  const plan=S.plan;
+  // 1) 高风险冰带穿越
+  rec.legs.forEach((L,i)=>{
+    if(L.riskAvg>=45 || L.riskMax>=70){
+      const lv=riskLevel(L.riskMax);
+      pushImpact(L.riskMax>=70?"high":"warn",
+        `航段 ${i+1}（${L.a.name} → ${L.b.name}）穿越${lv.n}风险冰带`,
+        `密集度峰值 <b>${(L.iceMax*100|0)}%</b>，风险均值 <b>${L.riskAvg|0}</b>。`+
+        `预计抵段时间 <b>${fmtClock(S.t+L.enterT)}</b>；冰阻将使实际航速下降并增加 `+
+        `<b>${(L.km*0.3).toFixed(0)} km</b> 等效油耗，连锁导致后续航段 ETA 推迟、燃料缓冲收窄。`);
+    }
+  });
+  // 2) 大风 / 低能见度
+  const gale=rec.events.find(e=>e.type==="gale");
+  if(gale) pushImpact("warn",`${fmtClock(gale.t)} 前后大风（${gale.wind.toFixed(0)} m/s）`,
+    "高冰密集 + 横风会降低舵效，建议在航路点设置等待窗口或下调航速；强行通过将抬升碰撞风险并进一步延误 ETA。");
+  const fog=rec.events.find(e=>e.type==="fog");
+  if(fog) pushImpact("warn",`${fmtClock(fog.t)} 低能见度（${fog.vis.toFixed(1)} km）`,
+    "目视避障窗口缩短，叠加冰带航段时应降速；保守估计通过时间增加 20%–35%。");
+
+  // 3) 补给窗口
+  const supplyLeg=rec.legs.find(L=>L.b.supply);
+  const evEarly=rec.events.find(e=>e.type==="supplyEarly");
+  const evMiss=rec.events.find(e=>e.type==="supplyMiss");
+  if(evMiss){
+    pushImpact("high",`预计 ${fmtClock(evMiss.t)} 抵达补给点，已错过窗口`,
+      `补给窗口 <b>${fmtClock(SUPPLY_OPEN)} – ${fmtClock(SUPPLY_CLOSE)}</b>。错过后无法补油，`+
+      `<b>连锁影响：</b>剩余燃料不足以支撑后续航段 → 存在漂航/等待救援风险，且补给点以北为通信盲区，无法即时呼叫。`);
+  }else if(evEarly){
+    pushImpact("warn",`预计早于补给窗口抵达，需等待 ${fmtDur(evEarly.wait)}`,
+      `窗口 ${fmtClock(SUPPLY_OPEN)} 开启。等待消耗少量燃料（怠速），并使最终 ETA 顺延至窗口之后；`+
+      `等待点位于通信覆盖边缘，期间链路可能短时中断。`);
+  }else if(supplyLeg && supplyLeg.enterT!=null){
+    const arr=S.t+supplyLeg.exitT;
+    const slackL=arr-SUPPLY_OPEN, slackR=SUPPLY_CLOSE-arr;
+    if(Math.min(slackL,slackR)<90){
+      pushImpact("warn",`补给时间裕度仅 ${fmtDur(Math.min(slackL,slackR))}`,
+        "冰情或等待的小幅波动即可错过窗口，建议提前在 WP2 设置等待或调整航速。");
+    }
+  }
+
+  // 4) 燃料
+  if(rec.events.some(e=>e.type==="fuel")){
+    const ev=rec.events.find(e=>e.type==="fuel");
+    pushImpact("high",`预计 ${fmtClock(ev.t)} 燃料耗尽`,
+      "船舶将在抵港/补给前失去动力并随浮冰漂移，冰区碰撞风险快速升高，且可能处于通信盲区内。");
+  }else if(rec.endFuel!=null && rec.endFuel<4){
+    pushImpact("warn",`抵达时燃料仅剩 ${rec.endFuel.toFixed(1)} t`,
+      "燃料缓冲低于安全阈值（4 t），任何额外等待或绕航都可能导致断油。");
+  }
+
+  // 5) 通信中断
+  if(rec.offlineMins>=60){
+    pushImpact(rec.offlineMins>=180?"high":"warn",
+      `预计通信中断累计 ${fmtDur(rec.offlineMins)}`,
+      "中断期间航线变更只能本地暂存，恢复链路后需与岸上确认版本合并；若恰好经过高风险冰带，岸基气象与冰况支持不可用。");
+    const blindLeg=rec.legs.find(L=>L.offMins>=45 && (L.riskAvg>=40||L.iceMax>=0.6));
+    if(blindLeg) pushImpact("high","盲区与高风险冰带重叠",
+      `航段 ${blindLeg.a.name} → ${blindLeg.b.name} 中约 ${fmtDur(blindLeg.offMins)} 无链路且冰情密集，`+
+      `离线操作冲突的处置延迟会直接放大航行风险。`);
+  }
+
+  // 6) ETA 期限
+  if(rec.finishT==null){
+    pushImpact("warn","72 小时预测窗口内无法抵达作业区",
+      "当前航速/等待/绕航组合使 ETA 超出预测期限，燃料与补给窗口压力同步上升。");
+  }else{
+    const eta=rec.finishT;
+    if(eta>DEADLINE) pushImpact("warn",`ETA ${fmtClock(eta)} 晚于计划期限 ${fmtClock(DEADLINE)}`,
+      "延误可能压缩作业窗口，并使返程与下一轮冰情周期重叠。");
+  }
+}
+/* ============ 方案编辑（在线直接改 / 离线记为待合并操作） ============ */
+function offline(){return S.offNow;}
+function opDesc(op){
+  switch(op.type){
+    case "move": return `移动 ${op.wpName} → (${(op.x*KM).toFixed(0)}, ${(op.y*KM).toFixed(0)}) km`;
+    case "wait": return `${op.wpName} 等待窗口设为 ${op.wait} 分钟`;
+    case "add":  return `在 ${op.afterName} 后插入航路点`;
+    case "del":  return `删除航路点 ${op.wpName}`;
+    case "speed":return `航速调整为 ${(op.speed/1.852).toFixed(0)} kn`;
+  }
+}
+function recordOp(op){
+  op.id=uid("op"); op.time=S.t; op.desc=opDesc(op); op.accept=true;
+  S.pendingOps.push(op);
+  toast("链路中断：操作已本地暂存，恢复后合并");
+}
+function setSpeed(v){
+  v=parseFloat(v);
+  if(offline()){ recordOp({type:"speed",speed:v}); }
+  S.plan.speed=v;
+  if(!offline()) S.ackPlan.speed=v;
+  S.dirty=true; snapshot("航速调整");
+}
+function setWait(id,wait){
+  const wp=S.plan.waypoints.find(w=>w.id===id); if(!wp)return;
+  const wi=S.plan.waypoints.indexOf(wp);
+  if(wi<=S.ship.leg){toast("该航路点位于已驶过航段，不能修改；可从历史节点分叉后调整");return;}
+  if(offline()) recordOp({type:"wait",wpId:id,wpName:wp.name,wait});
+  wp.wait=Math.max(0,wait|0);
+  if(!offline()) S.ackPlan.waypoints.find(w=>w.id===id).wait=wp.wait;
+  S.dirty=true; snapshot(wp.name+" 等待窗口");
+}
+function moveWaypoint(id,x,y,record=true){
+  const wp=S.plan.waypoints.find(w=>w.id===id); if(!wp||wp.supply)return;
+  if(S.plan.waypoints.indexOf(wp)<=S.ship.leg){toast("该航路点位于已驶过航段，请从历史节点分叉后再调整");return;}
+  x=clamp(x,15,W-15); y=clamp(y,15,H-15);
+  if(record && offline()) recordOp({type:"move",wpId:id,wpName:wp.name,x,y});
+  wp.x=x; wp.y=y;
+  if(record && !offline()) Object.assign(S.ackPlan.waypoints.find(w=>w.id===id),{x,y});
+  S.dirty=true;
+}
+function addWaypoint(afterIndex,x,y){
+  if(afterIndex<S.ship.leg){toast("该航段已经驶过，请从历史节点分叉后再调整");return;}
+  const after=S.plan.waypoints[afterIndex], before=S.plan.waypoints[afterIndex+1];
+  if(!before||!after)return;
+  const id=uid("wp");
+  const wp={id,name:"WP* 新点"+SIMUID,x:clamp(x,15,W-15),y:clamp(y,15,H-15),wait:0,removable:true};
+  if(offline()){
+    recordOp({type:"add",afterId:after.id,afterName:after.name,wp:deep(wp)});
+  }
+  S.plan.waypoints.splice(afterIndex+1,0,wp);
+  if(!offline()){
+    const ai=S.ackPlan.waypoints.findIndex(w=>w.id===after.id);
+    S.ackPlan.waypoints.splice(ai+1,0,deep(wp));
+  }
+  S.dirty=true; snapshot("插入航路点");
+}
+function removeWaypoint(id){
+  const i=S.plan.waypoints.findIndex(w=>w.id===id);
+  const wp=S.plan.waypoints[i];
+  if(i<0||!wp.removable)return;
+  if(i<=S.ship.leg){toast("该航路点位于已驶过航段，请从历史节点分叉后再删除");return;}
+  if(offline()) recordOp({type:"del",wpId:id,wpName:wp.name});
+  S.plan.waypoints.splice(i,1);
+  if(!offline()){
+    const ai=S.ackPlan.waypoints.findIndex(w=>w.id===id);
+    if(ai>=0)S.ackPlan.waypoints.splice(ai,1);
+  }
+  if(S.ship.leg>=i) S.ship.leg=Math.max(0,S.ship.leg-1);
+  S.selectedLeg=clamp(S.selectedLeg,0,S.plan.waypoints.length-2);
+  S.dirty=true; snapshot("删除航路点");
+}
+
+/* ============ 历史快照与分支 ============ */
+function snapshot(label,kind="edit"){
+  const snap={id:uid("snap"),t:S.t,label,kind,
+    plan:deep(S.plan),ship:deep(S.ship),floes:deep(S.floes),
+    trail:deep(S.trail),events:deep(S.events),
+    offlineEpisodes:deep(S.offlineEpisodes),offNow:S.offNow,offStart:S.offStart,
+    supplied:S.ship.supplied,branch:S.activeBranch};
+  S.snapshots.push(snap);
+  if(S.snapshots.length>120)S.snapshots.shift();
+}
+function autoSnapshot(){
+  if(S.t>=S.nextSnapAt){
+    snapshot(fmtClock(S.t),"auto");
+    S.nextSnapAt=S.t+30;
+  }
+}
+function branchTo(snap){
+  // 当前分支存盘
+  const cur={name:S.activeBranch,plan:deep(S.plan),ship:deep(S.ship),
+    floes:deep(S.floes),trail:deep(S.trail),events:deep(S.events),t:S.t,
+    offlineEpisodes:deep(S.offlineEpisodes),offNow:S.offNow,offStart:S.offStart,
+    ackPlan:deep(S.ackPlan),pendingOps:deep(S.pendingOps),snapshots:deep(S.snapshots),
+    nextSnapAt:S.nextSnapAt,manualOffline:S.manualOffline};
+  const idx=S.branches.findIndex(b=>b.name===S.activeBranch);
+  if(idx>=0)S.branches[idx]=cur; else S.branches.push(cur);
+
+  // 从同一基底找已有分支重入，否则新建
+  const baseName=snap.branch;
+  let name;
+  if(baseName!=="main" && S.branches.some(b=>b.name===baseName)){
+    name=baseName;
+  }else{
+    name="分叉@"+fmtClock(snap.t).replace(" ","");
+  }
+  // 恢复快照现场
+  S.plan=deep(snap.plan); S.ship=deep(snap.ship); S.floes=deep(snap.floes);
+  S.trail=deep(snap.trail); S.events=deep(snap.events);
+  S.offlineEpisodes=deep(snap.offlineEpisodes); S.offNow=snap.offNow; S.offStart=snap.offStart;
+  S.t=snap.t; S.activeBranch=name;
+  S.supplied=snap.supplied;
+  if(!S.branches.some(b=>b.name===name)){
+    S.branches.push({name,plan:deep(S.plan),ship:deep(S.ship),floes:deep(S.floes),
+      trail:deep(S.trail),events:deep(S.events),t:S.t,
+      offlineEpisodes:deep(S.offlineEpisodes),offNow:S.offNow,offStart:S.offStart,
+      ackPlan:deep(S.plan),pendingOps:[],snapshots:[deep(snap)],nextSnapAt:S.t+30,
+      manualOffline:S.manualOffline});
+  }
+  S.dirty=true;
+  toast("已从 "+fmtClock(snap.t)+" 节点分叉："+name);
+  renderAll();
+}
+function switchBranch(name){
+  const cur={name:S.activeBranch,plan:deep(S.plan),ship:deep(S.ship),
+    floes:deep(S.floes),trail:deep(S.trail),events:deep(S.events),t:S.t,
+    offlineEpisodes:deep(S.offlineEpisodes),offNow:S.offNow,offStart:S.offStart,
+    ackPlan:deep(S.ackPlan),pendingOps:deep(S.pendingOps),snapshots:deep(S.snapshots),
+    nextSnapAt:S.nextSnapAt,manualOffline:S.manualOffline};
+  const idx=S.branches.findIndex(b=>b.name===S.activeBranch);
+  if(idx>=0)S.branches[idx]=cur;
+  const b=S.branches.find(x=>x.name===name); if(!b)return;
+  Object.assign(S,{plan:deep(b.plan),ship:deep(b.ship),floes:deep(b.floes),
+    trail:deep(b.trail),events:deep(b.events),t:b.t,
+    offlineEpisodes:deep(b.offlineEpisodes),offNow:b.offNow,offStart:b.offStart,
+    activeBranch:b.name,ackPlan:deep(b.ackPlan),pendingOps:deep(b.pendingOps),
+    snapshots:deep(b.snapshots),nextSnapAt:b.nextSnapAt,manualOffline:b.manualOffline});
+  S.dirty=true; renderAll();
+}
+
+/* ============ 离线恢复：重放合并 ============ */
+function applyOpTo(plan,op){
+  switch(op.type){
+    case "move":{const w=plan.waypoints.find(x=>x.id===op.wpId);
+      if(!w||w.supply)return false; w.x=op.x;w.y=op.y;return true;}
+    case "wait":{const w=plan.waypoints.find(x=>x.id===op.wpId);
+      if(!w)return false; w.wait=op.wait;return true;}
+    case "add":{const i=plan.waypoints.findIndex(x=>x.id===op.afterId);
+      if(i<0)return false; plan.waypoints.splice(i+1,0,deep(op.wp));return true;}
+    case "del":{const i=plan.waypoints.findIndex(x=>x.id===op.wpId);
+      if(i<0)return false; if(!plan.waypoints[i].removable)return false;
+      plan.waypoints.splice(i,1);return true;}
+    case "speed": plan.speed=op.speed; return true;
+  }
+}
+function mergeOps(){
+  const plan={waypoints:deep(S.ackPlan.waypoints),speed:S.ackPlan.speed};
+  let ok=0,fail=0;
+  for(const op of S.pendingOps){
+    if(op.accept && applyOpTo(plan,op)) ok++;
+    else if(op.accept) fail++;
+  }
+  S.plan=plan; S.ackPlan=deep(plan);
+  S.pendingOps=[];
+  S.dirty=true;
+  toast(`合并完成：${ok} 项生效${fail?`，${fail} 项因航路点变更失效`:""}`);
+  snapshot("合并离线操作");
+  forecast=null;
+  renderAll();
+}
+/* ============ 海图渲染 ============ */
+const canvas=$("chart"), ctx=canvas.getContext("2d");
+let scale=1, offX=0, offY=0, DPR=1;
+function resize(){
+  const rect=canvas.parentElement.getBoundingClientRect();
+  DPR=window.devicePixelRatio||1;
+  canvas.width=rect.width*DPR; canvas.height=rect.height*DPR;
+  canvas.style.width=rect.width+"px"; canvas.style.height=rect.height+"px";
+  scale=Math.min(rect.width/W,rect.height/H);
+  offX=(rect.width-W*scale)/2; offY=(rect.height-H*scale)/2;
+}
+window.addEventListener("resize",resize);
+function toWorld(clientX,clientY){
+  const r=canvas.getBoundingClientRect();
+  return {x:(clientX-r.left-offX)/scale, y:(clientY-r.top-offY)/scale};
+}
+function iceColor(c){
+  // 深蓝 -> 冰白
+  const t=c;
+  const r=lerp(10,210,t), g=lerp(26,232,t), b=lerp(42,245,t);
+  return `rgb(${r|0},${g|0},${b|0})`;
+}
+function draw(tMs){
+  const cw=canvas.width/DPR, ch=canvas.height/DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.clearRect(0,0,cw,ch);
+  ctx.fillStyle="#07131e"; ctx.fillRect(0,0,cw,ch);
+  ctx.save(); ctx.translate(offX,offY); ctx.scale(scale,scale);
+  // 裁剪到海图区
+  ctx.beginPath();ctx.rect(0,0,W,H);ctx.clip();
+
+  drawWater(tMs);
+  drawIceField();
+  drawFloes();
+  drawComms();
+  drawFog();
+  drawWind();
+  drawTrail();
+  drawRoute();
+  drawSupply();
+  drawWaypoints();
+  drawShip(tMs);
+  ctx.restore();
+}
+function drawWater(){
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,"#0b1f2e");g.addColorStop(1,"#081622");
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle="rgba(57,194,215,.07)";ctx.lineWidth=1;
+  for(let x=0;x<=W;x+=100){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<=H;y+=100){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  ctx.fillStyle="rgba(131,167,191,.45)";ctx.font="10px sans-serif";
+  for(let x=100;x<W;x+=200) ctx.fillText((x*KM|0)+" km",x+3,H-6);
+  for(let y=100;y<H;y+=200) ctx.fillText((y*KM|0)+" km",4,y-3);
+}
+function drawIceField(){
+  const step=26;
+  for(let y=0;y<H;y+=step)for(let x=0;x<W;x+=step){
+    const c=iceAt(x+step/2,y+step/2,S.t);
+    if(c<0.28)continue;
+    ctx.fillStyle=iceColor(c*0.9);
+    ctx.globalAlpha=clamp((c-0.25)/0.6,0.05,0.55);
+    ctx.fillRect(x,y,step,step);
+  }
+  ctx.globalAlpha=1;
+  // 冰带边界虚线
+  ctx.setLineDash([7,7]);ctx.lineWidth=1.5;
+  ICE_BELTS.forEach((b0,i)=>{
+    const b=beltAtTime(b0,S.t);
+    ctx.strokeStyle=i===0?"rgba(120,190,225,.5)":"rgba(120,190,225,.35)";
+    ctx.beginPath();ctx.ellipse(b.cx,b.cy,b.rx,b.ry,b.rot,0,Math.PI*2);ctx.stroke();
+  });
+  ctx.setLineDash([]);
+}
+function drawFloes(){
+  for(const f of S.floes){
+    ctx.save();ctx.translate(f.x,f.y);ctx.rotate(f.rot);
+    const c=iceAt(f.x,f.y,S.t);
+    ctx.fillStyle=`rgba(${lerp(150,235,c)|0},${lerp(200,245,c)|0},${lerp(225,250,c)|0},.78)`;
+    ctx.strokeStyle="rgba(255,255,255,.35)";ctx.lineWidth=1;
+    ctx.beginPath();
+    const n=7;
+    for(let i=0;i<n;i++){
+      const a=i/n*Math.PI*2, rr=f.r*(0.75+0.35*Math.sin(i*3.7+f.rot*4));
+      const px=Math.cos(a)*rr, py=Math.sin(a)*rr;
+      i?ctx.lineTo(px,py):ctx.moveTo(px,py);
+    }
+    ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();
+  }
+}
+function drawComms(){
+  COMMS.forEach(c=>{
+    ctx.beginPath();ctx.arc(c.x,c.y,c.r,0,Math.PI*2);
+    ctx.fillStyle="rgba(57,194,215,.07)";ctx.fill();
+    ctx.strokeStyle="rgba(57,194,215,.45)";ctx.setLineDash([5,5]);ctx.lineWidth=1.2;ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle="rgba(57,194,215,.85)";ctx.beginPath();ctx.arc(c.x,c.y,3,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle="rgba(183,232,247,.75)";ctx.font="11px sans-serif";
+    ctx.fillText("📡 "+c.name,c.x+8,c.y-7);
+  });
+}
+function drawFog(){
+  const v=visAt(S.t);
+  if(v>8)return;
+  const alpha=clamp((8-v)/10,0,0.6);
+  ctx.fillStyle=`rgba(210,225,235,${alpha*0.5})`;ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=`rgba(230,240,248,${alpha*0.35})`;
+  for(let i=0;i<26;i++){
+    const x=(i*173+S.t*1.4)% (W+200)-100, y=(i*97)%H;
+    ctx.beginPath();ctx.ellipse(x,y,90,22,0,0,Math.PI*2);ctx.fill();
+  }
+}
+function drawWind(){
+  const w=windAt(S.t);
+  ctx.strokeStyle="rgba(180,210,230,.35)";ctx.fillStyle="rgba(180,210,230,.5)";
+  ctx.lineWidth=1;
+  for(let x=90;x<W;x+=200)for(let y=90;y<H;y+=200){
+    const ang=(w.dir)*Math.PI/180;
+    const u=Math.sin(ang), v=Math.cos(ang);
+    const len=8+w.speed*0.7;
+    ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+u*len,y+v*len);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(x+u*len,y+v*len);
+    ctx.lineTo(x+u*len*0.55-v*3,y+v*len*0.55+u*3);
+    ctx.lineTo(x+u*len*0.55+v*3,y+v*len*0.55-u*3);
+    ctx.closePath();ctx.fill();
+  }
+}
+function drawTrail(){
+  if(S.trail.length<2)return;
+  ctx.strokeStyle="rgba(242,180,65,.55)";ctx.lineWidth=2.5;ctx.setLineDash([6,4]);
+  ctx.beginPath();
+  S.trail.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
+  ctx.stroke();ctx.setLineDash([]);
+}
+function drawRoute(){
+  const wps=S.plan.waypoints;
+  // 未来路线
+  ctx.lineWidth=2.5;
+  for(let i=0;i<wps.length-1;i++){
+    const a=wps[i],b=wps[i+1];
+    const sel=i===S.selectedLeg;
+    if(forecast&&forecast.legs[i]){
+      const L=forecast.legs[i], lv=riskLevel(L.riskMax);
+      ctx.strokeStyle=sel?"#ffffff":lv.col;
+      ctx.globalAlpha=sel?1:0.85;
+    }else{ctx.strokeStyle="#b7e8f7";}
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+    ctx.globalAlpha=1;
+  }
+  // 离线暂存：虚线叠加提示
+  if(S.offNow){
+    ctx.strokeStyle="rgba(169,133,224,.7)";ctx.setLineDash([3,6]);ctx.lineWidth=1.5;
+    ctx.beginPath();
+    wps.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
+    ctx.stroke();ctx.setLineDash([]);
+  }
+}
+function drawSupply(){
+  const s=SUPPLY;
+  ctx.save();ctx.translate(s.x,s.y);
+  ctx.fillStyle="rgba(240,138,60,.2)";ctx.beginPath();ctx.arc(0,0,14,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle="#f08a3c";
+  ctx.beginPath();
+  ctx.moveTo(0,-9);ctx.lineTo(8,7);ctx.lineTo(-8,7);ctx.closePath();ctx.fill();
+  ctx.fillStyle="#1a2a36";ctx.font="bold 10px sans-serif";ctx.textAlign="center";
+  ctx.fillText("油",0,4);
+  ctx.textAlign="left";
+  ctx.fillStyle="#f6c098";ctx.font="11px sans-serif";
+  ctx.fillText("补给站 "+fmtClock(SUPPLY_OPEN)+"–"+fmtClock(SUPPLY_CLOSE).split(" ")[1],12,-8);
+  ctx.restore();
+}
+function drawWaypoints(){
+  S.plan.waypoints.forEach((w,i)=>{
+    if(w.supply)return;
+    ctx.beginPath();ctx.arc(w.x,w.y,8,0,Math.PI*2);
+    ctx.fillStyle=w.removable?"#b7e8f7":"#7fb6c9";
+    ctx.fill();ctx.lineWidth=2;
+    ctx.strokeStyle=hoverWp===w.id?"#ffffff":"#14485a";ctx.stroke();
+    ctx.fillStyle="#0a1622";ctx.font="bold 9px sans-serif";ctx.textAlign="center";
+    ctx.fillText(String(i+1),w.x,w.y+3);ctx.textAlign="left";
+    ctx.fillStyle="rgba(220,235,247,.9)";ctx.font="11px sans-serif";
+    ctx.fillText(w.name,w.x>W-130?w.x-12-w.name.length*13:w.x+11,w.y-8);
+    if(w.wait>0){
+      ctx.fillStyle="#f2b441";ctx.font="10px sans-serif";
+      ctx.fillText("⏳ "+fmtDur(w.wait),w.x+11,w.y+6);
+    }
+  });
+}
+function drawShip(tMs){
+  const sh=S.ship;
+  ctx.save();ctx.translate(sh.x,sh.y);ctx.rotate(sh.hdg);
+  ctx.shadowColor="rgba(57,194,215,.8)";ctx.shadowBlur=12;
+  ctx.fillStyle=S.offNow?"#a985e0":"#39c2d7";
+  ctx.beginPath();
+  ctx.moveTo(14,0);ctx.lineTo(-9,-7);ctx.lineTo(-5,0);ctx.lineTo(-9,7);
+  ctx.closePath();ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.strokeStyle="#dff6fc";ctx.lineWidth=1;ctx.stroke();
+  ctx.restore();
+  // 风险环
+  const ice=iceAt(sh.x,sh.y,S.t),wd=windAt(S.t),vs=visAt(S.t);
+  const r=riskOf(ice,wd.speed,vs), lv=riskLevel(r);
+  ctx.beginPath();ctx.arc(sh.x,sh.y,18,0,Math.PI*2);
+  ctx.strokeStyle=lv.col;ctx.globalAlpha=.7;ctx.lineWidth=2;ctx.setLineDash([4,3]);ctx.stroke();
+  ctx.setLineDash([]);ctx.globalAlpha=1;
+}
+/* ============ 海图交互 ============ */
+let hoverWp=null, dragWp=null, downInfo=null, lastClickTime=0;
+const HIT=13/scale;
+function wpAt(p){
+  for(let i=S.plan.waypoints.length-1;i>=0;i--){
+    const w=S.plan.waypoints[i];
+    if(Math.hypot(w.x-p.x,w.y-p.y)<=HIT) return w;
+  }
+  return null;
+}
+function legAt(p){
+  const wps=S.plan.waypoints;
+  for(let i=0;i<wps.length-1;i++){
+    const a=wps[i],b=wps[i+1];
+    const dx=b.x-a.x,dy=b.y-a.y,L2=dx*dx+dy*dy;
+    let t=((p.x-a.x)*dx+(p.y-a.y)*dy)/L2; t=clamp(t,0,1);
+    const px=a.x+dx*t,py=a.y+dy*t;
+    if(Math.hypot(p.x-px,p.y-py)<=10/scale) return i;
+  }
+  return -1;
+}
+canvas.addEventListener("pointerdown",e=>{
+  const p=toWorld(e.clientX,e.clientY);
+  const w=wpAt(p);
+  downInfo={p,w,moved:false,t:performance.now()};
+  if(w&&!w.supply){dragWp=w;canvas.setPointerCapture(e.pointerId);canvas.style.cursor="grabbing";}
+});
+canvas.addEventListener("pointermove",e=>{
+  const p=toWorld(e.clientX,e.clientY);
+  if(dragWp){
+    if(downInfo&&Math.hypot(p.x-downInfo.p.x,p.y-downInfo.p.y)>4)downInfo.moved=true;
+    moveWaypoint(dragWp.id,p.x,false);
+  }else{
+    const w=wpAt(p);
+    hoverWp=w?w.id:null;
+    canvas.style.cursor=w?(w.supply?"not-allowed":"grab"):(legAt(p)>=0?"pointer":"crosshair");
+  }
+});
+canvas.addEventListener("pointerup",e=>{
+  if(dragWp){
+    const movedWp=dragWp; dragWp=null;canvas.style.cursor="grab";
+    if(downInfo&&downInfo.moved){
+      const p=toWorld(e.clientX,e.clientY);
+      if(offline()){
+        // 用最终位置覆盖/合并本航路点未合并的移动操作
+        const lastMove=[...S.pendingOps].reverse().find(o=>o.type==="move"&&o.wpId===movedWp.id);
+        const op={type:"move",wpId:movedWp.id,wpName:movedWp.name,
+          x:clamp(p.x,15,W-15),y:clamp(p.y,15,H-15)};
+        if(lastMove)Object.assign(lastMove,op,{desc:opDesc(op)});
+        else recordOp(op);
+        // 预览坐标已改，岸上确认版本保持不动
+      }
+      snapshot("拖动航路点");renderAll();
+    }
+  }
+  if(downInfo&&!downInfo.moved){
+    const p=downInfo.p;
+    const li=legAt(p);
+    if(li>=0 && !downInfo.w){S.selectedLeg=li;renderAll();}
+  }
+  downInfo=null;
+});
+canvas.addEventListener("dblclick",e=>{
+  const p=toWorld(e.clientX,e.clientY);
+  const w=wpAt(p);
+  if(w&&w.removable){removeWaypoint(w.id);renderAll();return;}
+  const li=legAt(p);
+  if(li>=0){
+    const a=S.plan.waypoints[li],b=S.plan.waypoints[li+1];
+    const mx=(a.x+b.x)/2+(p.x-(a.x+b.x)/2)*0.4;
+    const my=(a.y+b.y)/2+(p.y-(a.y+b.y)/2)*0.4;
+    addWaypoint(li,mx,my);renderAll();
+  }
+});
+
+/* ============ 时间轴 ============ */
+const tl=$("tlCanvas");
+function tlGeom(){
+  const r=tl.getBoundingClientRect();
+  return {w:r.width,h:r.height,padL:8,padR:8};
+}
+function tToX(t,g){return g.padL+(t/HORIZON)*(g.w-g.padL-g.padR);}
+function xToT(x,g){return clamp((x-g.padL)/(g.w-g.padL-g.padR)*HORIZON,0,HORIZON);}
+function drawTimeline(){
+  const g=tlGeom(),D=window.devicePixelRatio||1;
+  tl.width=g.w*D;tl.height=g.h*D;
+  const c=tl.getContext("2d");c.setTransform(D,0,0,D,0,0);
+  c.clearRect(0,0,g.w,g.h);
+  // 离线区间（t 为相对推演起点的分钟）
+  c.fillStyle="rgba(169,133,224,.22)";
+  S.offlineEpisodes.forEach(ep=>{
+    const x1=tToX(ep.start,g),x2=tToX(ep.end,g);
+    c.fillRect(x1,0,x2-x1,g.h);
+  });
+  if(S.offNow&&S.offStart!=null){
+    c.fillRect(tToX(S.offStart,g),0,tToX(S.t,g)-tToX(S.offStart,g),g.h);
+  }
+  // 网格
+  c.strokeStyle="rgba(33,64,90,.8)";c.fillStyle="rgba(131,167,191,.8)";c.font="9px sans-serif";
+  for(let h=0;h<=HORIZON;h+=360){
+    const x=tToX(h,g);
+    c.beginPath();c.moveTo(x,0);c.lineTo(x,g.h);c.stroke();
+    c.fillText(fmtClock(h),x+2,g.h-4);
+  }
+  // 补给窗口
+  c.fillStyle="rgba(240,138,60,.25)";
+  c.fillRect(tToX(SUPPLY_OPEN,g),0,tToX(SUPPLY_CLOSE,g)-tToX(SUPPLY_OPEN,g),g.h);
+  // 快照节点
+  S.snapshots.forEach(sn=>{
+    if(sn.t>HORIZON)return;
+    const x=tToX(sn.t,g);
+    c.beginPath();c.arc(x,g.h/2,sn.kind==="auto"?2.5:4,0,Math.PI*2);
+    c.fillStyle=sn.kind==="auto"?"#3d6a85":"#4dd0e1";c.fill();
+  });
+  // 当前时间
+  const cx=tToX(Math.min(S.t,HORIZON),g);
+  c.strokeStyle="#f2b441";c.lineWidth=2;
+  c.beginPath();c.moveTo(cx,0);c.lineTo(cx,g.h);c.stroke();
+  c.fillStyle="#f2b441";c.beginPath();c.moveTo(cx,0);c.lineTo(cx-5,-0);c.lineTo(cx+5,0);c.fill();
+}
+tl.addEventListener("click",e=>{
+  const r=tl.getBoundingClientRect(),g=tlGeom();
+  const t=xToT(e.clientX-r.left,g);
+  // 找最近的编辑/自动快照
+  let best=null;
+  S.snapshots.forEach(sn=>{
+    if(Math.abs(sn.t-t)<=45&&(!best||Math.abs(sn.t-t)<Math.abs(best.t-t)))best=sn;
+  });
+  if(!best){
+    // 允许在任意整点 30 分节点回退：自动补一个不可行——只提示
+    toast("该时刻没有历史节点，请使用 +30 分步进或先在更早节点分叉");
+    return;
+  }
+  if(best.t>=S.t-1){toast("该节点位于当前时刻之后，无法回退");return;}
+  branchTo(best);
+});
+/* ============ 面板渲染 ============ */
+function renderHUD(){
+  const sh=S.ship, wd=windAt(S.t), vs=visAt(S.t);
+  const ice=iceAt(sh.x,sh.y,S.t), r=riskOf(ice,wd.speed,vs), lv=riskLevel(r);
+  $("hudPos").textContent=(sh.x*KM).toFixed(0)+", "+(sh.y*KM).toFixed(0)+" km";
+  $("hudSpd").textContent=sh.waitLeft>0?"等待中":(((S.plan.speed*(1-0.55*iceAt(sh.x,sh.y,S.t)))/1.852).toFixed(1)+" / "+(S.plan.speed/1.852).toFixed(0)+" kn");
+  $("hudHdg").textContent=(((sh.hdg*180/Math.PI)%360+360)%360|0)+"°";
+  $("hudWind").textContent=wd.speed.toFixed(0)+" m/s · "+(wd.dir|0)+"°";
+  $("hudVis").textContent=vs<2?"<2 km（雾）":vs.toFixed(1)+" km";
+  $("hudFuel").textContent=sh.fuel.toFixed(1)+" t";
+  const fp=clamp(sh.fuel/FUEL_MAX*100,0,100);
+  const bar=$("hudFuelBar");bar.style.width=fp+"%";
+  bar.style.background=fp<18?"#ef5350":fp<35?"#f2b441":"#43d17d";
+  const rr=$("hudRisk");rr.textContent=lv.n+" "+(r|0);rr.style.color=lv.col;
+  $("simClock").textContent=fmtClock(S.t)+(S.running?"  ▶":"  ⏸");
+  const pill=$("commsPill");
+  if(S.offNow){pill.textContent="● 通信中断"+(S.manualOffline?"（手动）":"");pill.className="pill off";}
+  else{pill.textContent="● 通信在线";pill.className="pill on";}
+  $("btnOffline").textContent=S.manualOffline?"恢复通信（手动）":"模拟通信中断";
+  $("btnOffline").classList.toggle("toggled",S.manualOffline);
+}
+function renderSummary(){
+  if(S.dirty||!forecast)refreshForecast();
+  const rec=forecast, {total}=legGeoms(S.plan.waypoints);
+  $("distVal").textContent=total.toFixed(0)+" km";
+  if(rec.finishT==null){
+    $("etaVal").textContent="72h 内不可达";
+  }else if(remain && remain.finishT!=null && S.t>0){
+    $("etaVal").textContent=fmtClock(rec.finishT)+"（剩余航程约 "+fmtDur(remain.finishT-S.t)+"）";
+  }else{
+    $("etaVal").textContent=fmtClock(rec.finishT);
+  }
+  if(remain){
+    $("fuelEndVal").textContent=(remain.endFuel??0).toFixed(1)+" t"+(remain.finishT==null?"（窗口末）":"");
+  }
+  $("gapVal").textContent=rec.offlineMins?fmtDur(rec.offlineMins):"0h00";
+  const lv=riskLevel(rec.maxRisk);
+  $("maxRiskVal").innerHTML=`<span class="tag ${lv.cls}">${lv.n} ${rec.maxRisk|0}</span>`;
+  $("forecastMeta").textContent="基于 "+fmtClock(S.t)+" 船位推演";
+  const diverged=JSON.stringify(S.ackPlan.waypoints)!==JSON.stringify(S.plan.waypoints)||S.ackPlan.speed!==S.plan.speed;
+  $("planStateLine").textContent=S.offNow
+    ?"链路中断：本地方案为临时版本，恢复后需与岸上确认版本合并。"
+    :(diverged?"存在未合并的离线变更，请在下方审查合并。":"方案与岸上确认版本一致。");
+}
+function renderImpacts(){
+  const box=$("impactList");
+  if(!impacts.length){box.innerHTML='<div class="muted">当前方案未发现重大连锁影响。</div>';return;}
+  box.innerHTML=impacts.map(im=>
+    `<div class="impact ${im.sev==="warn"?"warn":""}">
+      <div class="t">${im.sev==="warn"?"⚠":"⛔"} ${im.title}</div>
+      <div class="chain">${im.chain}</div></div>`).join("");
+}
+function renderWaypoints(){
+  const box=$("wpList");
+  box.innerHTML=S.plan.waypoints.map((w,i)=>`
+    <div class="wprow">
+      <span class="nm">${w.name}${w.supply?' <span class="tag t-high">固定补给</span>':""}</span>
+      <span class="muted">等待</span>
+      <input type="number" min="0" step="30" value="${w.wait}" data-wp="${w.id}" title="到点后主动等待分钟数" ${i<=S.ship.leg?"disabled":""}>
+      <span class="muted">分</span>
+      <button class="iconbtn danger" data-del="${w.id}" ${w.removable?"":"disabled"}>删</button>
+    </div>`).join("");
+  box.querySelectorAll("input[data-wp]").forEach(inp=>{
+    inp.addEventListener("change",()=>setWait(inp.dataset.wp,parseInt(inp.value)||0));
+  });
+  box.querySelectorAll("button[data-del]").forEach(b=>{
+    b.addEventListener("click",()=>removeWaypoint(b.dataset.del));
+  });
+}
+function opValid(op){return applyOpTo({waypoints:deep(S.ackPlan.waypoints),speed:S.ackPlan.speed},{...op,accept:true});}
+function renderOffline(){
+  const show=S.pendingOps.length>0;
+  $("offlineCard").style.display=show?"":"none";
+  if(!show)return;
+  $("offlineList").innerHTML=S.pendingOps.map(op=>{
+    const valid=opValid(op);
+    return `<div class="offrow">
+      <input type="checkbox" ${op.accept?"checked":""} data-op="${op.id}" ${valid?"":"disabled"}>
+      <span class="nm" style="flex:1">${op.desc}<br><span class="muted">${fmtClock(op.time)}${valid?"":" · 航路点已不存在，失效"}</span></span>
+    </div>`;
+  }).join("");
+  $("offlineList").querySelectorAll("input[data-op]").forEach(cb=>{
+    cb.addEventListener("change",()=>{
+      const op=S.pendingOps.find(o=>o.id===cb.dataset.op);if(op)op.accept=cb.checked;
+    });
+  });
+}
+function renderBranches(){
+  $("branchTag").textContent="当前："+S.activeBranch;
+  const rows=[{name:"main",t:0}].concat(S.branches.filter(b=>b.name!=="main"));
+  $("branchList").innerHTML=rows.map(b=>{
+    const snapN=b.name==="main"?S.snapshots.length:(b.snapshots?b.snapshots.length:0);
+    return `<div class="branchrow">
+      <span class="nm" style="flex:1">${b.name==="main"?"主线（当前航次）":b.name}</span>
+      <span class="muted">${b.name===S.activeBranch?"进行中":fmtClock(b.t)}</span>
+      <button class="iconbtn" data-go="${b.name}" ${b.name===S.activeBranch?"disabled":""}>进入</button>
+      <button class="iconbtn danger" data-kill="${b.name}" ${b.name==="main"||b.name===S.activeBranch?"disabled":""}>删</button>
+    </div>`;
+  }).join("")+`<div class="muted" style="margin-top:5px">历史节点：${S.snapshots.length} 个（每 30 分钟及每次编辑自动存档）</div>`;
+  $("branchList").querySelectorAll("button[data-go]").forEach(b=>
+    b.addEventListener("click",()=>switchBranch(b.dataset.go)));
+  $("branchList").querySelectorAll("button[data-kill]").forEach(b=>
+    b.addEventListener("click",()=>{
+      S.branches=S.branches.filter(x=>x.name!==b.dataset.kill);renderBranches();
+    }));
+}
+function renderSelLeg(){
+  const box=$("selInfo");
+  if(!forecast||!forecast.legs[S.selectedLeg]){box.style.display="none";return;}
+  const L=forecast.legs[S.selectedLeg], lv=riskLevel(L.riskMax);
+  const passed=S.ship.leg>S.selectedLeg;
+  const current=S.ship.leg===S.selectedLeg;
+  const bars=[];
+  if(L.enterT!=null){
+    const h0=Math.floor(L.enterT/60),h1=Math.floor(L.exitT/60);
+    const hs=forecast.hours;
+    for(let h=h0;h<=h1;h++){
+      const hr=hs[h];
+      if(!hr||!hr.n)continue;
+      bars.push({v:hr.riskMax,label:(T0+h*60)%1440/60|0,off:hr.commsOff>=40});
+    }
+  }
+  const shown=bars.slice(0,16);
+  box.style.display="block";
+  box.innerHTML=`
+    <h4>航段 ${S.selectedLeg+1}：${L.a.name} → ${L.b.name}
+      ${passed?'<span class="tag t-low" style="margin-left:6px">已驶过</span>':
+        current?'<span class="tag t-mod" style="margin-left:6px">当前段</span>':""}</h4>
+    <div class="kv">
+      <span class="k">段长</span><span></span><span class="v">${L.km.toFixed(0)} km</span>
+      <span class="k">预计进入</span><span></span><span class="v">${L.enterT==null?"—":fmtClock(L.enterT)}</span>
+      <span class="k">冰密集度峰值</span><span></span><span class="v">${(L.iceMax*100|0)}%</span>
+      <span class="k">风险均值 / 峰值</span><span></span><span class="v">${L.riskAvg|0} / <span class="tag ${lv.cls}">${lv.n} ${L.riskMax|0}</span></span>
+      <span class="k">段内无链路</span><span></span><span class="v">${L.offMins?fmtDur(L.offMins):"无"}</span>
+    </div>
+    <div class="muted" style="margin-top:8px">逐小时风险（灰色横轴刻度=该小时离线）</div>
+    <div class="riskbars">${shown.map(b=>
+      `<div class="bar" style="height:${b.v}%;background:${riskLevel(b.v).col}${b.off?';opacity:.45':''}" title="风险 ${b.v|0}${b.off?'（离线）':''}"><span>${b.label}</span></div>`).join("")}</div>
+    <div class="muted" style="margin-top:18px">${passed?"历史航段风险（方案全程预测）。":"点击其他航段查看；拖航路点或改航速后实时重算。"}</div>`;
+}
+function renderAll(){
+  renderHUD();renderSummary();renderImpacts();renderWaypoints();
+  renderOffline();renderBranches();renderSelLeg();
+  $("snapCount").textContent="节点 "+S.snapshots.length;
+}
+/* ============ live 推演 ============ */
+function liveStep(mins){
+  S._live=true;
+  const rec=newRec();
+  for(let i=0;i<mins;i++){
+    const before={x:S.ship.x,y:S.ship.y};
+    stepMinute(S,S.plan,rec);
+    if(Math.hypot(S.ship.x-before.x,S.ship.y-before.y)>0.01){
+      S.trail.push({x:S.ship.x,y:S.ship.y});
+      if(S.trail.length>4000)S.trail.shift();
+    }
+    autoSnapshot();
+    S.dirty=true;
+    if(S.ship.done||S.ship.dead){
+      S.running=false;
+      $("btnPlay").textContent=S.ship.dead?"⛔ 燃料耗尽，已停车":"✓ 已抵达作业区";
+      $("btnStep").disabled=true;
+      snapshot(S.ship.dead?"断油停车":"抵达作业区","event");
+      break;
+    }
+  }
+}
+
+/* ============ 主循环 ============ */
+let lastTs=0, acc=0;
+function frame(ts){
+  requestAnimationFrame(frame);
+  const dt=Math.min(100,ts-(lastTs||ts));lastTs=ts;
+  if(S.running){
+    const rate=parseFloat($("rateSel").value); // 仿真分钟/秒
+    acc+=rate*dt/1000;
+    const n=Math.floor(acc);acc-=n;
+    if(n>0)liveStep(Math.min(n,240));
+  }
+  if(S.dirty){forecast=null;}
+  if(!forecast)refreshForecast();
+  draw(ts);drawTimeline();
+  renderHUD();
+  if(S.dirty||ts-(frame._ui||0)>400){
+    renderSummary();renderImpacts();renderSelLeg();
+    renderOffline();renderBranches();
+    $("snapCount").textContent="节点 "+S.snapshots.length;
+    frame._ui=ts;
+  }
+}
+
+/* ============ 控件 ============ */
+let toastTimer=null;
+function toast(msg){
+  const el=$("toast");el.textContent=msg;el.style.display="block";
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.style.display="none",2600);
+}
+$("btnPlay").addEventListener("click",()=>{
+  if(S.ship.done||S.ship.dead)return;
+  S.running=!S.running;
+  $("btnPlay").textContent=S.running?"⏸ 暂停":"▶ 继续推演";
+});
+$("btnStep").addEventListener("click",()=>{
+  S.running=false;$("btnPlay").textContent="▶ 继续推演";
+  liveStep(30);
+});
+$("speedSel").addEventListener("change",e=>setSpeed(e.target.value));
+$("btnReset").addEventListener("click",()=>{
+  initState();
+  $("btnPlay").textContent="▶ 开始推演";$("btnPlay").disabled=false;
+  $("btnStep").disabled=false;
+  snapshot("初始方案","auto");
+  forecast=null;remain=null;renderAll();
+  toast("已重置为初始航次");
+});
+$("btnOffline").addEventListener("click",()=>{
+  S.manualOffline=!S.manualOffline;
+  commsUpdate(S,S.t,null);
+  S.dirty=true;renderAll();
+});
+$("btnMerge").addEventListener("click",mergeOps);
+$("btnDiscardOffline").addEventListener("click",()=>{
+  S.pendingOps=[];S.dirty=true;renderAll();toast("已丢弃全部离线操作");
+});
+
+/* ============ 启动 ============ */
+resize();
+initState();
+$("speedSel").value=String(S.plan.speed);
+snapshot("初始方案","auto");
+refreshForecast();
+renderAll();
+requestAnimationFrame(frame);
+</script>
+</html>
