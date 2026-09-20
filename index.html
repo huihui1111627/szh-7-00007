@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>极地航线决策推演系统 · PolarRoute</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div class="brand">
+      <span class="logo">❄</span>
+      <div>
+        <h1>极地航线决策推演系统</h1>
+        <span class="subtitle">POLAR ROUTE DECISION CONSOLE</span>
+      </div>
+    </div>
+    <div class="clock-wrap">
+      <div class="clock" id="clock">--</div>
+      <div class="clock-sub" id="clockSub">任务 T+00:00</div>
+    </div>
+    <div class="sim-controls">
+      <button class="btn" id="btnPlay" title="播放 / 暂停">▶ 开始推演</button>
+      <div class="rate-group" id="rateGroup">
+        <button data-rate="60">1分/秒</button>
+        <button data-rate="300" class="active">5分/秒</button>
+        <button data-rate="1800">30分/秒</button>
+        <button data-rate="3600">1时/秒</button>
+      </div>
+      <button class="btn" id="btnJump">+1 小时</button>
+      <button class="btn ghost" id="btnReset">重置任务</button>
+    </div>
+  </header>
+
+  <div id="main">
+    <aside id="leftPanel" class="panel">
+      <section class="gauge-block">
+        <h3>船体状态</h3>
+        <label style="font-size:11px;color:var(--dim)">计划航速 <b id="speedVal" style="color:var(--cyan)">12.0 kn</b></label>
+        <input type="range" id="speedRange" min="4" max="18" step="0.5" value="12" style="width:100%;accent-color:var(--cyan);margin:2px 0 8px">
+        <div class="gauge-row"><span>航速</span><b id="gSpeed">-- kn</b></div>
+        <div class="gauge-row"><span>艏向</span><b id="gHeading">--°</b></div>
+        <div class="gauge-row"><span>航程</span><b id="gDist">-- / -- nmi</b></div>
+      </section>
+      <section class="gauge-block">
+        <h3>燃料余量</h3>
+        <div class="bar"><div class="bar-fill fuel" id="fuelBar"></div></div>
+        <div class="gauge-row"><span>当前</span><b id="gFuel">--%</b></div>
+        <div class="gauge-row"><span>抵达补给点预计</span><b id="gFuelAtStation">--%</b></div>
+      </section>
+      <section class="gauge-block">
+        <h3>环境</h3>
+        <div class="gauge-row"><span>风向 / 风速</span><b id="gWind">-- / -- kn</b></div>
+        <div class="gauge-row"><span>能见度</span><b id="gVis">-- nmi</b></div>
+        <div class="gauge-row"><span>当前冰况</span><b id="gIce">--</b></div>
+      </section>
+      <section class="gauge-block">
+        <h3>通信</h3>
+        <div class="comm-pill" id="commPill"><span class="dot"></span><span id="commText">--</span></div>
+        <div class="gauge-row"><span>下一段盲区</span><b id="gBlackout">--</b></div>
+      </section>
+      <section class="gauge-block">
+        <h3>任务节点</h3>
+        <div class="gauge-row"><span>预计抵达补给点</span><b id="gEta">--</b></div>
+        <div class="gauge-row"><span>补给窗口</span><b id="gWindow">--</b></div>
+        <div class="gauge-row"><span>预计抵达终点</span><b id="gEtaEnd">--</b></div>
+      </section>
+      <div class="hint">
+        <b>操作提示</b><br>
+        拖动航路点改变路线 · 点击航段查看逐小时风险<br>
+        双击航路点设置等待窗口 · 滑动航速改变计划
+      </div>
+    </aside>
+
+    <div id="chartWrap">
+      <canvas id="chart"></canvas>
+      <div id="mapLegend">
+        <span><i class="lg lg-ice"></i>高风险冰带</span>
+        <span><i class="lg lg-floe"></i>浮冰</span>
+        <span><i class="lg lg-comm"></i>通信覆盖</span>
+        <span><i class="lg lg-station"></i>补给站</span>
+      </div>
+      <div id="mapScale"></div>
+      <div id="offlineBanner" class="hidden">
+        <b>⚠ 通信中断</b> — 当前驶出通信覆盖范围，编辑操作将进入离线队列，恢复连接后合并
+      </div>
+      <div id="hoverTip" class="hidden"></div>
+    </div>
+
+    <aside id="rightPanel" class="panel">
+      <nav class="tabs">
+        <button class="tab active" data-tab="risk">风险</button>
+        <button class="tab" data-tab="chain">连锁影响</button>
+        <button class="tab" data-tab="hist">推演历史</button>
+        <button class="tab" data-tab="ops">离线操作</button>
+      </nav>
+      <div class="tab-body" id="tabRisk">
+        <div id="segInfo" class="seg-empty">点击海图上的航线选择航段，查看未来数小时的逐小时通行风险。</div>
+      </div>
+      <div class="tab-body hidden" id="tabChain"></div>
+      <div class="tab-body hidden" id="tabHist"></div>
+      <div class="tab-body hidden" id="tabOps"></div>
+    </aside>
+  </div>
+
+  <footer id="timelineBar">
+    <div class="tl-labels" id="tlLabels"></div>
+    <div class="tl-track" id="tlTrack">
+      <div class="tl-ice" id="tlIce"></div>
+      <div class="tl-comm" id="tlComm"></div>
+      <div class="tl-wait" id="tlWait"></div>
+      <div class="tl-nodes" id="tlNodes"></div>
+      <div class="tl-cursor" id="tlCursor"></div>
+    </div>
+    <div class="tl-info">
+      <span id="tlInfoText">准备就绪</span>
+      <span class="tl-legend">
+        <span><i style="background:var(--amber)"></i>中风险</span>
+        <span><i style="background:var(--red)"></i>高/极危冰况</span>
+        <span><i style="background:rgba(242,99,94,.5)"></i>通信盲区</span>
+        <span><i style="background:var(--purple)"></i>等待窗口</span>
+        <span><i style="background:var(--cyan);border-radius:50%"></i>历史节点</span>
+      </span>
+    </div>
+  </footer>
+</div>
+
+<div id="modalMask" class="hidden">
+  <div class="modal" id="wpModal">
+    <h3>航路点设置 · <span id="wpModalTitle"></span></h3>
+    <label>等待窗口（该点等待小时数）</label>
+    <div class="modal-row">
+      <input type="range" id="wpWaitRange" min="0" max="12" step="0.5" value="0">
+      <b id="wpWaitVal">0 h</b>
+    </div>
+    <label class="chk"><input type="checkbox" id="wpLockSpeed"> 从此点起使用自定义计划航速</label>
+    <div class="modal-row">
+      <input type="range" id="wpSpeedRange" min="4" max="18" step="0.5" value="12" disabled>
+      <b id="wpSpeedVal">12 kn</b>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="wpDelete">删除航路点</button>
+      <span style="flex:1"></span>
+      <button class="btn ghost" id="wpCancel">取消</button>
+      <button class="btn primary" id="wpApply">应用</button>
+    </div>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
